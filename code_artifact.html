@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>별똥별 잡기 (Star Catcher)</title>
+  <style>
+    /* =========================================
+       1. 기본 스타일 및 레이아웃 설정
+       ========================================= */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none; /* 모바일/마우스 드래그 시 텍스트 선택 방지 */
+      -webkit-user-select: none;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #1b2735 0%, #090a0f 100%);
+      color: #ffffff;
+      font-family: 'Pretendard', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden; /* 스크롤 방지 */
+      padding: 16px;
+    }
+
+    /* 상단 점수판(HUD) 영역 */
+    .hud {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+      padding: 12px 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      margin-bottom: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .hud-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hud-label {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+
+    .hud-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+
+    .hud-value.highlight {
+      color: #facc15; /* 노란색 강조 */
+    }
+
+    /* 게임 캔버스 컨테이너 */
+    .game-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 65vh;
+      max-height: 640px;
+      min-height: 400px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none; /* 모바일 터치 스크롤 방지 */
+    }
+
+    /* 시작 및 게임 오버 오버레이 화면 */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      transition: opacity 0.3s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .game-title {
+      font-size: 32px;
+      font-weight: 900;
+      margin-bottom: 10px;
+      background: linear-gradient(to right, #fde047, #f97316);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .game-desc {
+      font-size: 14px;
+      color: #cbd5e1;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .final-score-box {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 16px 32px;
+      border-radius: 16px;
+      margin-bottom: 24px;
+    }
+
+    /* 게임 버튼 스타일 (입체감 및 호버 효과) */
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      padding: 14px 36px;
+      font-size: 18px;
+      font-weight: 700;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(37, 99, 235, 0.7);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px);
+    }
+
+    /* 하단 조작 안내 */
+    .controls-hint {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #94a3b8;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 점수 및 생명 표시판 -->
+  <div class="hud">
+    <div class="hud-item">
+      <span class="hud-label">점수</span>
+      <span id="scoreDisplay" class="hud-value highlight">0</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">생명</span>
+      <span id="livesDisplay" class="hud-value">❤️❤️❤️</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">최고 기록</span>
+      <span id="highScoreDisplay" class="hud-value">0</span>
+    </div>
+  </div>
+
+  <!-- 메인 게임 화면 -->
+  <div class="game-wrapper" id="gameWrapper">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 시작 화면 오버레이 -->
+    <div id="startOverlay" class="overlay">
+      <h1 class="game-title">✨ 별똥별 잡기 ✨</h1>
+      <p class="game-desc">
+        하늘에서 떨어지는 <b>별(⭐)</b>을 바구니로 받아내세요!<br>
+        무지개 별(🌟)은 보너스 점수, <b>운석(☄️)</b>은 피해야 합니다.
+      </p>
+      <button id="startBtn" class="btn-primary">시작하기</button>
+    </div>
+
+    <!-- 게임 오버 화면 오버레이 -->
+    <div id="gameOverOverlay" class="overlay hidden">
+      <h2 class="game-title">게임 종료!</h2>
+      <div class="final-score-box">
+        <div class="hud-label">최종 점수</div>
+        <div id="finalScore" class="hud-value highlight" style="font-size: 36px;">0</div>
+      </div>
+      <button id="restartBtn" class="btn-primary">다시 하기</button>
+    </div>
+  </div>
+
+  <!-- 하단 조작 안내 문구 -->
+  <div class="controls-hint">
+    💻 PC: 방향키(← →) 또는 마우스 이동 &nbsp;|&nbsp; 📱 모바일: 화면 터치 드래그
+  </div>
+
+  <script>
+    /* =========================================================================
+       [학생 수정 영역] 아래 변수들을 바꾸면 게임 난이도와 색상을 쉽게 조절할 수 있습니다!
+       ========================================================================= */
+    const GAME_CONFIG = {
+      playerSpeed: 8,          // 키보드 이동 속도 (숫자가 클수록 빠름)
+      playerWidth: 75,         // 플레이어 우주선/바구니 가로 크기
+      playerHeight: 24,        // 플레이어 세로 크기
+      playerColor: '#38bdf8',  // 플레이어 색상 (하늘색)
+      initialLives: 3,         // 시작 생명 개수
+      spawnInterval: 650,      // 아이템 생성 주기 (밀리초 단위, 작을수록 많이 떨어짐)
+      baseFallSpeed: 3.2,      // 아이템 기본 낙하 속도
+      meteorChance: 0.28,      // 운석(장애물)이 나올 확률 (0.28 = 28%)
+      superStarChance: 0.12    // 보너스 무지개 별이 나올 확률 (0.12 = 12%)
+    };
+
+    /* =========================================================================
+       1. DOM 요소 및 캔버스 초기화
+       ========================================================================= */
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('gameWrapper');
+
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const livesDisplay = document.getElementById('livesDisplay');
+    const highScoreDisplay = document.getElementById('highScoreDisplay');
+    const startOverlay = document.getElementById('startOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const finalScoreEl = document.getElementById('finalScore');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+
+    // 브라우저 로컬 스토리지에서 최고 기록 불러오기
+    let highScore = localStorage.getItem('starCatcherHighScore') || 0;
+    highScoreDisplay.textContent = highScore;
+
+    // 캔버스 크기를 컨테이너에 맞게 반응형으로 조절하는 함수
+    function resizeCanvas() {
+      canvas.width = wrapper.clientWidth;
+      canvas.height = wrapper.clientHeight;
+      if (player) {
+        player.y = canvas.height - 45;
+        player.x = Math.min(player.x, canvas.width - player.width);
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    /* =========================================================================
+       2. Web Audio API 효과음 생성기 (외부 사운드 파일 없이 코드로 소리 생성)
+       ========================================================================= */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'star') {
+        // 일반 별 획득: 맑고 경쾌한 딩~ 소리
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, now); // D5
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now);
+        osc.stop(now + 0.15);
+      } else if (type === 'super') {
+        // 보너스 별 획득: 높은 아르페지오 소리
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(659.25, now); // E5
+        osc.frequency.setValueAtTime(987.77, now + 0.08); // B5
+        osc.frequency.setValueAtTime(1318.51, now + 0.16); // E6
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      } else if (type === 'hit') {
+        // 운석 충돌: 낮고 둔탁한 경고음
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+    }
+
+    /* =========================================================================
+       3. 게임 상태 및 객체 정의
+       ========================================================================= */
+    let isPlaying = false;
+    let score = 0;
+    let lives = GAME_CONFIG.initialLives;
+    let items = [];       // 떨어지는 별과 운석 배열
+    let particles = [];   // 획득/충돌 시 터지는 불꽃 효과 배열
+    let bgStars = [];     // 배경 반짝이는 별 배열
+    let lastSpawnTime = 0;
+    let animationId;
+
+    // 플레이어 객체
+    const player = {
+      x: 0,
+      y: 0,
+      width: GAME_CONFIG.playerWidth,
+      height: GAME_CONFIG.playerHeight,
+      color: GAME_CONFIG.playerColor
+    };
+
+    // 배경 별 초기화
+    function initBackgroundStars() {
+      bgStars = [];
+      for (let i = 0; i < 45; i++) {
+        bgStars.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: Math.random() * 1.8 + 0.5,
+          alpha: Math.random(),
+          speed: Math.random() * 0.4 + 0.1
+        });
+      }
+    }
+
+    /* =========================================================================
+       4. 입력 처리 (키보드, 마우스, 터치 모두 지원)
+       ========================================================================= */
+    const keys = { ArrowLeft: false, ArrowRight: false };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        keys[e.code] = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        keys[e.code] = false;
+      }
+    });
+
+    // 마우스 및 터치 좌표로 플레이어 중심 이동
+    function movePlayerToPointer(clientX) {
+      if (!isPlaying) return;
+      const rect = canvas.getBoundingClientRect();
+      const relativeX = clientX - rect.left;
+      player.x = relativeX - player.width / 2;
+
+      // 화면 밖으로 나가지 않도록 제한
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width) {
+        player.x = canvas.width - player.width;
+      }
+    }
+
+    canvas.addEventListener('mousemove', (e) => movePlayerToPointer(e.clientX));
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length > 0) {
+        movePlayerToPointer(e.touches[0].clientX);
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 0) {
+        movePlayerToPointer(e.touches[0].clientX);
+      }
+    }, { passive: false });
+
+    /* =========================================================================
+       5. 게임 로직 (아이템 생성, 파티클 효과, 충돌 판정)
+       ========================================================================= */
+    function spawnItem() {
+      const rand = Math.random();
+      let type = 'star';
+      let emoji = '⭐';
+      let radius = 16;
+
+      if (rand < GAME_CONFIG.meteorChance) {
+        type = 'meteor';
+        emoji = '☄️';
+        radius = 18;
+      } else if (rand < GAME_CONFIG.meteorChance + GAME_CONFIG.superStarChance) {
+        type = 'super';
+        emoji = '🌟';
+        radius = 19;
+      }
+
+      // 점수가 높아질수록 낙하 속도가 조금씩 빨라짐 (난이도 상승)
+      const speedBonus = Math.min(score * 0.015, 4.5);
+
+      items.push({
+        x: Math.random() * (canvas.width - radius * 2) + radius,
+        y: -25,
+        radius: radius,
+        speed: GAME_CONFIG.baseFallSpeed + Math.random() * 1.8 + speedBonus,
+        type: type,
+        emoji: emoji,
+        rotation: 0,
+        rotSpeed: (Math.random() - 0.5) * 0.08
+      });
+    }
+
+    // 아이템 획득/충돌 시 화려한 파티클(입자) 생성
+    function createParticles(x, y, color) {
+      for (let i = 0; i < 12; i++) {
+        particles.push({
+          x: x,
+          y: y,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          radius: Math.random() * 3.5 + 1.5,
+          color: color,
+          life: 1.0
+        });
+      }
+    }
+
+    // 상단 UI 업데이트
+    function updateHUD() {
+      scoreDisplay.textContent = score;
+      livesDisplay.textContent = '❤️'.repeat(Math.max(0, lives));
+      if (score > highScore) {
+        highScore = score;
+        highScoreDisplay.textContent = highScore;
+        localStorage.setItem('starCatcherHighScore', highScore);
+      }
+    }
+
+    /* =========================================================================
+       6. 메인 게임 루프 (업데이트 & 그리기)
+       ========================================================================= */
+    function update(timestamp) {
+      if (!isPlaying) return;
+
+      // 1) 키보드 이동 처리
+      if (keys.ArrowLeft) player.x -= GAME_CONFIG.playerSpeed;
+      if (keys.ArrowRight) player.x += GAME_CONFIG.playerSpeed;
+
+      // 벽 충돌 방지
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width) {
+        player.x = canvas.width - player.width;
+      }
+
+      // 2) 일정 시간마다 새 아이템 생성
+      const currentInterval = Math.max(280, GAME_CONFIG.spawnInterval - score * 1.5);
+      if (timestamp - lastSpawnTime > currentInterval) {
+        spawnItem();
+        lastSpawnTime = timestamp;
+      }
+
+      // 3) 떨어지는 아이템 위치 업데이트 및 충돌 검사
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        item.y += item.speed;
+        item.rotation += item.rotSpeed;
+
+        // 플레이어(사각형)와 아이템(원)의 충돌 판정
+        const closestX = Math.max(player.x, Math.min(item.x, player.x + player.width));
+        const closestY = Math.max(player.y, Math.min(item.y, player.y + player.height));
+        const distX = item.x - closestX;
+        const distY = item.y - closestY;
+        const distanceSquared = (distX * distX) + (distY * distY);
+
+        if (distanceSquared < (item.radius * item.radius)) {
+          // 충돌 발생!
+          if (item.type === 'star') {
+            score += 10;
+            playSound('star');
+            createParticles(item.x, item.y, '#facc15');
+          } else if (item.type === 'super') {
+            score += 30;
+            playSound('super');
+            createParticles(item.x, item.y, '#f472b6');
+          } else if (item.type === 'meteor') {
+            lives -= 1;
+            playSound('hit');
+            createParticles(item.x, item.y, '#ef4444');
+          }
+
+          updateHUD();
+          items.splice(i, 1);
+
+          // 생명이 0이 되면 게임 종료
+          if (lives <= 0) {
+            endGame();
+            return;
+          }
+          continue;
+        }
+
+        // 화면 바닥 아래로 벗어난 아이템 제거
+        if (item.y - item.radius > canvas.height) {
+          items.splice(i, 1);
+        }
+      }
+
+      // 4) 파티클 애니메이션 업데이트
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.035;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      // 5) 배경 별 반짝임 업데이트
+      bgStars.forEach(s => {
+        s.y += s.speed;
+        if (s.y > canvas.height) {
+          s.y = 0;
+          s.x = Math.random() * canvas.width;
+        }
+      });
+    }
+
+    function draw() {
+      // 화면 지우기
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1) 배경 별 그리기
+      bgStars.forEach(s => {
+        ctx.fillStyle = `rgba(255, 255, 255, ${s.alpha})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 2) 플레이어(우주선 바구니) 그리기
+      ctx.save();
+      ctx.fillStyle = player.color;
+      ctx.shadowColor = player.color;
+      ctx.shadowBlur = 15;
+      // 둥근 모서리 사각형 그리기
+      ctx.beginPath();
+      ctx.roundRect(player.x, player.y, player.width, player.height, 12);
+      ctx.fill();
+
+      // 바구니 상단 하이라이트 라인
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(player.x + 8, player.y + 3, player.width - 16, 4, 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 3) 떨어지는 아이템(이모지) 그리기
+      ctx.font = '28px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      items.forEach(item => {
+        ctx.save();
+        ctx.translate(item.x, item.y);
+        ctx.rotate(item.rotation);
+        ctx.fillText(item.emoji, 0, 0);
+        ctx.restore();
+      });
+
+      // 4) 파티클 효과 그리기
+      particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    function gameLoop(timestamp) {
+      if (!isPlaying) return;
+      update(timestamp);
+      draw();
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    /* =========================================================================
+       7. 게임 시작 및 종료 제어 함수
+       ========================================================================= */
+    function startGame() {
+      resizeCanvas();
+      initBackgroundStars();
+
+      score = 0;
+      lives = GAME_CONFIG.initialLives;
+      items = [];
+      particles = [];
+      player.x = (canvas.width - player.width) / 2;
+      player.y = canvas.height - 45;
+
+      updateHUD();
+      startOverlay.classList.add('hidden');
+      gameOverOverlay.classList.add('hidden');
+
+      isPlaying = true;
+      lastSpawnTime = performance.now();
+      cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      isPlaying = false;
+      cancelAnimationFrame(animationId);
+      finalScoreEl.textContent = score;
+      gameOverOverlay.classList.remove('hidden');
+    }
+
+    // 버튼 클릭 이벤트 연결
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    // 페이지 첫 로드 시 배경 미리 그리기
+    window.onload = function() {
+      resizeCanvas();
+      initBackgroundStars();
+      player.x = (canvas.width - player.width) / 2;
+      player.y = canvas.height - 45;
+      draw();
+    };
+  </script>
+</body>
+</html>
